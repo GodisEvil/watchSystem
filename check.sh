@@ -1,7 +1,7 @@
 #!/bin/bash
 
 EMAIL_ADDRESS=('xxx@gmail.com' 'xxx@gmail.com')
-LOCAL_SERVER_NAME='12.34.56.78'
+#LOCAL_SERVER_NAME='1.2.3.4'
 
 function sendEmail()	{
 	if [ $# -ne 3 ]; then
@@ -9,7 +9,8 @@ function sendEmail()	{
 		return 1
 	fi
 	local errType=$1
-	local subject="${LOCAL_SERVER_NAME}: $2"
+	#local subject="${LOCAL_SERVER_NAME}: $2"
+	local subject="$2"
 	## 把制表符替换成空格；换行符替换成<br>
 	local msg=`echo "${3}" | tr '\t ' ' ' | sed ':a;N;$!ba;s/\n/<br>/g'`
 	if [ $DEBUG ]; then
@@ -17,8 +18,8 @@ function sendEmail()	{
 		echo "${msg}"
 	else
 		for email in ${EMAIL_ADDRESS[@]}; do
-			echo curl --connect-timeout 10 -H 'Content-Type: application/json' -d "{\"to\":\"${email}\", \"subject\":\"${subject}\",\"msg\":\"${msg}\"}" "http://119.29.8.160:8088/email/send" >>debug.log
-			curl --connect-timeout 10 -H 'Content-Type: application/json' -d "{\"to\":\"${email}\", \"subject\":\"${subject}\",\"msg\":\"${msg}\"}" "http://119.29.8.160:8088/email/send"
+			#echo curl --connect-timeout 10 -H 'Content-Type: application/json' -d "{\"to\":\"${email}\", \"subject\":\"${subject}\",\"msg\":\"${msg}\"}" "http://xxxx/email/send" >>debug.log
+			curl --connect-timeout 10 -H 'Content-Type: application/json' -d "{\"to\":\"${email}\", \"subject\":\"${subject}\",\"msg\":\"${msg}\"}" "http://xxxx/email/send"
 			## 可能对方的服务器挂掉了，那么先记录到本地，直接退出
 			if [ $? -ne 0 ]; then
 				date '+%Y-%m-%d %H:%M:%S' >> email_unsend.txt
@@ -193,14 +194,14 @@ function checkPort()	{
 
 
 ## ping host，如果返回错误则报警
-PING_LIST=('32.45.56.64' '1.2.3.4')
+PING_LIST=('20.6.05.4' '19.2.8.10' '4.8.16.7' '4.8.10.4' '47.8.16.1' '5.9.19.15')
 PING_INTERV=1
 
 function checkHost()	{
 	local errType='host'
 	hasSendEmail "${errType}"
 	for i in ${PING_LIST[@]}; do
-		ping -c 1 -W 1 "${i}" >/dev/null
+		ping -c 1 -W 3 "${i}" >/dev/null
 		if [ $? -ne 0 ]; then
 			sendEmail "${errType}" "host ${i} ping failed" "Host ${i} ping failed"
 			return 1
@@ -210,8 +211,11 @@ function checkHost()	{
 
 
 if [ $# -ne 1 ]; then 
-	echo 'Usage: check.sh cpu|mem|rom|net|process|port|host'
+	echo 'Usage: check.sh cpu|mem|rom|net|process|port|host|all'
 else
+	cd `dirname $0`
+	## 用 crontab 运行的时候，PATH=/usr/bin:/bin，而脚本中部分命令比如 pidof 可能在 /usr/sbin 或者 /sbin 目录下
+	export PATH=/usr/sbin:/sbin:$PATH
 	case ${1} in
 		'cpu')	checkCPU
 		;;
@@ -227,7 +231,7 @@ else
 		;;
 		'host')	checkHost
 		;;
-		'all')	checkCPU && checkMem && checkROM && checkNet && checkProcess && checkPort && checkHost
+		'all')	checkCPU; checkMem; checkROM; checkNet; checkProcess; checkPort; checkHost
 	esac
 fi
 
