@@ -1,7 +1,6 @@
 #!/bin/bash
 
-EMAIL_ADDRESS=('xxx@gmail.com' 'xxx@gmail.com')
-#LOCAL_SERVER_NAME='1.2.3.4'
+EMAIL_ADDRESS=('xxx@gmail.com' 'xxx0@gmail.com')
 
 function sendEmail()	{
 	if [ $# -ne 3 ]; then
@@ -9,7 +8,6 @@ function sendEmail()	{
 		return 1
 	fi
 	local errType=$1
-	#local subject="${LOCAL_SERVER_NAME}: $2"
 	local subject="$2"
 	## 把制表符替换成空格；换行符替换成<br>
 	local msg=`echo "${3}" | tr '\t ' ' ' | sed ':a;N;$!ba;s/\n/<br>/g'`
@@ -18,8 +16,8 @@ function sendEmail()	{
 		echo "${msg}"
 	else
 		for email in ${EMAIL_ADDRESS[@]}; do
-			#echo curl --connect-timeout 10 -H 'Content-Type: application/json' -d "{\"to\":\"${email}\", \"subject\":\"${subject}\",\"msg\":\"${msg}\"}" "http://xxxx/email/send" >>debug.log
-			curl --connect-timeout 10 -H 'Content-Type: application/json' -d "{\"to\":\"${email}\", \"subject\":\"${subject}\",\"msg\":\"${msg}\"}" "http://xxxx/email/send"
+			#echo curl --connect-timeout 10 -H 'Content-Type: application/json' -d "{\"to\":\"${email}\", \"subject\":\"${subject}\",\"msg\":\"${msg}\"}" "http://www.xxx.com/email/send" >>debug.log
+			curl --connect-timeout 10 -H 'Content-Type: application/json' -d "{\"to\":\"${email}\", \"subject\":\"${subject}\",\"msg\":\"${msg}\"}" "http://www.xxx.com/email/send"
 			## 可能对方的服务器挂掉了，那么先记录到本地，直接退出
 			if [ $? -ne 0 ]; then
 				date '+%Y-%m-%d %H:%M:%S' >> email_unsend.txt
@@ -27,7 +25,8 @@ function sendEmail()	{
 				echo "${msg}" >> email_unsend.txt
 				exit 1
 			else
-				touch "$errType"
+				echo "${subject}" > "$errType"
+				echo "${msg}" >> "$errType"
 			fi
 		done
 	fi
@@ -69,12 +68,12 @@ function checkCPU() {
 		local iowait=`echo $line | awk '{print $7}'`
 		## 如果 iowait 
 		if [ `echo "${iowait} > ${CPU_IOWAIT_MAX}" | bc` == '1' ]; then
-			sendEmail "${errType}" 'cpu iowait too high' "${status}"
+			sendEmail "${errType}" "cpu iowait is ${iowait}%" "${status}"
 			return 1
 		fi
 		local idle=`echo "$line" | awk '{print $NF}'`
 		if [ `echo "${idle} < ${CPU_LOW}" | bc` == '1' ]; then
-			sendEmail "${errType}" 'cpu occupy too high' "${status}"
+			sendEmail "${errType}" "cpu idle is ${idle}" "${status}"
 			return 1
 		fi
 	done
@@ -96,7 +95,7 @@ function checkMem()	{
 	local totalMem=`echo "${status}" | sed -n '2p' | awk '{print $2}'`
 	local freeMem=`echo "${status}" | sed -n '2p' | awk '{print $4+$6}'`
 	if [ `echo "${freeMem} < ${MEM_LOW}" | bc` == '1' ]; then
-		sendEmail "${errType}" 'mem free too less' "${status}"
+		sendEmail "${errType}" "mem free ${freeMem}" "${status}"
 		return 1
 	fi
 #	local swapInfo=`echo ${status} | sed -n '4p'`
@@ -118,16 +117,16 @@ function checkROM()	{
 	echo "${sizeStatus}" | grep '^/dev/' | while read line; do
 		local avaSize=`echo $line | awk '{print $4}'`
 		if [ `echo "${avaSize} < ${ROM_LOW}" | bc` == '1' ]; then
-			sendEmail "${errType}" 'rom avaiable too less' "${sizeStatus}"
+			sendEmail "${errType}" "rom avaiable is ${avaSize}" "${sizeStatus}"
 			return 1
 		fi
 	done
 	local inodeStatus=`df -i`
 	echo "${inodeStatus}" | grep '^/dev/' | while read line; do
 		local inodeUsed=`echo ${line} | awk '{print $5}'`
-		inodeUsed=${inodeUsed::0-1}
+		inodeUsed=${inodeUsed%\%}
 		if [ `echo "${inodeUsed} > ${ROM_INODE_MAX}" | bc` == '1' ]; then
-			sendEmail "${errType}" 'rom inode left too little' "${inodeStatus}"
+			sendEmail "${errType}" "rom inode used ${inodeUsed}%" "${inodeStatus}"
 			return 1
 		fi
 	done
@@ -138,8 +137,8 @@ function checkROM()	{
 # 注意网速是 bit/s，而读取的结果是 bytes, 1byte = 8bit
 # 去掉 lo 的数据即可
 # 出口带宽高于 BANDWIDTH 或者占 BANDWIDTH_MAX 的比例超过了 BANDWIDTH_PERCENT 则报警
-## 5M 带宽就是 5 * 1024 * 1024 = 5242880 bytes/s，4M时提醒 
-BANDWIDTH=4194304
+## 5M 带宽就是 5 * 1024 * 1024 / 8 = 655360 bytes/s，4M时提醒 
+BANDWIDTH=524288
 #BANDWIDTH_MAX=102400
 #BANDWIDTH_PERCENT=90
 BANDWIDTH_INTERV=5
@@ -150,9 +149,9 @@ function checkNet()	{
 	hasSendEmail "${errType}"
 	local status=`cat /proc/net/dev; sleep 1; cat /proc/net/dev`
 	for i in ${ETH_LIST[@]}; do
-		local bandwidth=`echo "${status}" | grep ${i} | awk 'BEGIN {t1=0; t2=0} {if (NR==1) t1=$2; else if (NR==2) t2=$2;} END {print t2-t1}'`
-		if [ `echo "${bandwidth} > ${BANDWIDTH}" | bc` == '1' ]; then
-			sendEmail "${errType}" 'net bandwidth occupy too much' "${status}"
+		local outBandwidth=`echo "${status}" | grep ${i} | awk 'BEGIN {t1=0; t2=0} {if (NR==1) t1=$10; else if (NR==2) t2=$10;} END {print t2-t1}'`
+		if [ `echo "${outBandwidth} > ${BANDWIDTH}" | bc` == '1' ]; then
+			sendEmail "${errType}" "net bandwidth occupy ${outBandwidth} bytes/s" "${status}"
 			return 1
 		fi
 	done
@@ -194,7 +193,7 @@ function checkPort()	{
 
 
 ## ping host，如果返回错误则报警
-PING_LIST=('20.6.05.4' '19.2.8.10' '4.8.16.7' '4.8.10.4' '47.8.16.1' '5.9.19.15')
+PING_LIST=('1.6.5.4' '9.8.8.10' '7.8.1.4' '7.8.9.6' '7.8.1.1' '8.6.1.5')
 PING_INTERV=1
 
 function checkHost()	{
