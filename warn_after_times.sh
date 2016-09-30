@@ -11,6 +11,7 @@ ERR_FLAG='errCnt'
 ## 如果是的，判断文件内数字加上本次是否超过 ERR_MAX_TIMES ，小于则返回 1； 否则返回 0
 function isNeedEmail()	{
 	if [ ! -f "${ERR_FLAG}" ]; then
+		echo 1 > ${ERR_FLAG}
 		return 1
 	fi
 	local mtime=`stat -c %Y ${ERR_FLAG}`
@@ -64,12 +65,13 @@ function sendEmail()	{
 		return 1
 	fi
 	local errType=$1
+	## 把邮件内容记录到相应错误类型
+	echo "${2}" > "$errType"
+	echo "${3}" >> "$errType"
+	
 	local subject="$2"
 	## 把制表符替换成空格；换行符替换成<br>
 	local msg=`echo "${3}" | tr '\t ' ' ' | sed ':a;N;$!ba;s/\n/<br>/g'`
-	## 把邮件内容记录到相应错误类型
-	echo "${subject}" > "$errType"
-	echo "${msg}" >> "$errType"
 	isNeedEmail
 	## 不需要发邮件的话就直接返回
 	if [ $? -ne 0 ]; then
