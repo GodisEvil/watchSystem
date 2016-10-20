@@ -256,7 +256,8 @@ function checkHost()	{
 	local errType='host'
 	hasSendEmail "${errType}"
 	for i in ${PING_LIST[@]}; do
-		ping -c 1 -W 5 "${i}" >/dev/null
+		## ping 2 times
+		ping -c 2 -W 3 "${i}" >/dev/null
 		if [ $? -ne 0 ]; then
 			sendEmail "${errType}" "host ${i} ping failed" "Host ${i} ping failed"
 			return 1
